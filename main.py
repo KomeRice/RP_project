@@ -160,13 +160,25 @@ class BackTrackChronoArc(WordleMindGuesser):
             return True
         return False
 
-def fitness(prev_word, prev_green, prev_orange, word):
-    green, orange = checkWord(word, prev_word)
 
-    return
+class Genetics:
+    
+    def __init__(self, word_length,wordleMindInst:WordleMind,verbose = False ):
+        super().__init__(word_length, wordleMindInst, verbose)
+        self.prev_words = []
+        self.prev_green =[]
+        self.prev_orange =[]
 
-def genetics(filtered_dico, word_length, maxgen, maxsize, timeout):
-    start_time = time.time()
+    def fitness(word):
+        value = 0
+        for index in range(len(self.prev_words)):
+            green, orange = compareWords(word, prev_word[index])
+            if (green,orange) != (self.prev_green[index],self.prev_orange[index]):
+                value +=1
+        return value
+
+    def genetics(filtered_dico, word_length, maxgen, maxsize, timeout):
+        start_time = time.time()
 
 
 def main(argv):
