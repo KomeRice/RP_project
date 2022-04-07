@@ -1,7 +1,10 @@
 import random
+import string
 import sys
 import time
 from collections import defaultdict
+
+import numpy as np
 
 DICO_PATH = './dico.txt'
 DICO_INST = []
@@ -13,10 +16,10 @@ def damerau_levenshtein_distance(s1, s2):
     d = {}
     lenstr1 = len(s1)
     lenstr2 = len(s2)
-    for i in range(-1,lenstr1+1):
-        d[(i,-1)] = i+1
-    for j in range(-1,lenstr2+1):
-        d[(-1,j)] = j+1
+    for i in range(-1, lenstr1 + 1):
+        d[(i, -1)] = i + 1
+    for j in range(-1, lenstr2 + 1):
+        d[(-1, j)] = j + 1
 
     for i in range(lenstr1):
         for j in range(lenstr2):
@@ -24,13 +27,11 @@ def damerau_levenshtein_distance(s1, s2):
                 cost = 0
             else:
                 cost = 1
-            d[(i,j)] = min(
-                           d[(i-1,j)] + 1,
+            d[(i,j)] = min(d[(i-1,j)] + 1,
                            d[(i,j-1)] + 1,
-                           d[(i-1,j-1)] + cost,
-                          )
-            if i and j and s1[i]==s2[j-1] and s1[i-1] == s2[j]:
-                d[(i,j)] = min (d[(i,j)], d[i-2,j-2] + cost)
+                           d[(i-1,j-1)] + cost)
+            if i and j and s1[i] == s2[j - 1] and s1[i - 1] == s2[j]:
+                d[(i, j)] = min(d[(i, j)], d[i - 2, j - 2] + cost)
 
     return d[lenstr1-1,lenstr2-1]
 
@@ -75,6 +76,9 @@ class WordleMind:
         return False
 
     def checkWord(self, word):
+        if word not in self.dico:
+            print(f'Rejected invalid word guess: {word}')
+            return 0, 0
         return compareWords(word, self.secret)
 
 class WordleMindGuesser:
@@ -161,25 +165,168 @@ class BackTrackChronoArc(WordleMindGuesser):
         return False
 
 
-class Genetics:
-    
-    def __init__(self, word_length,wordleMindInst:WordleMind,verbose = False ):
+class Genetics(WordleMindGuesser):
+    def __init__(self, word_length, wordleMindInst : WordleMind, maxSize, maxGen = 10, timeout = 300,
+                 probMut = 0.5, verbose = False):
         super().__init__(word_length, wordleMindInst, verbose)
+        self.population = np.array([])
         self.prev_words = []
-        self.prev_green =[]
-        self.prev_orange =[]
+        self.prev_green = []
+        self.prev_orange = []
+        self.maxSize = maxSize
+        self.maxGen = maxGen
+        self.goodGuesses = np.array([])
+        self.timeout = timeout
+        self.probMut = probMut
 
-    def fitness(word):
+    def guess(self, strStart):
+        chosenWord = random.choice(self.wordleMindInst.dico)
+        greenLetters, orangeLetters = self.guessWordRegister(chosenWord)
+        if self.verbose:
+            print(f'Chosen word {chosenWord} - Green: {greenLetters} | Orange: {orangeLetters}')
+        if greenLetters == self.word_length:
+            return True
+        while True:
+            self.genetics()
+            chosenWord = self.choice()
+            greenLetters, orangeLetters = self.guessWordRegister(chosenWord)
+            if self.verbose:
+                print(f'Chosen word {chosenWord} - Green: {greenLetters} | Orange: {orangeLetters}')
+            if greenLetters == self.word_length:
+                return True
+        return False
+
+    def guessWordRegister(self, word):
+        greenLetters, orangeLetters = self.wordleMindInst.checkWord(word)
+        self.prev_words.append(word)
+        self.prev_green.append(greenLetters)
+        self.prev_orange.append(orangeLetters)
+        return greenLetters, orangeLetters
+
+    def choice(self):
+        return random.choice(self.population)
+
+    def approximatePop(self):
+        newPop = set()
+        for word in self.population:
+            bestWords = set()
+            bestDist = np.inf
+            for dictWord in self.wordleMindInst.dico:
+                if dictWord == word:
+                    newPop.add(word)
+                    break
+                curDist = damerau_levenshtein_distance(word, dictWord)
+                if curDist <= bestDist:
+                    bestDist = curDist
+                    bestWords = set()
+                    bestWords.add(dictWord)
+                elif curDist == bestDist:
+                    bestWords.add(dictWord)
+            newPop = newPop.union(bestWords)
+        popSet = set(newPop)
+        self.population = np.array(list(popSet))
+        return
+
+    def fitness(self, word):
         value = 0
         for index in range(len(self.prev_words)):
-            green, orange = compareWords(word, prev_word[index])
+            green, orange = compareWords(word, self.prev_words[index])
             if (green,orange) != (self.prev_green[index],self.prev_orange[index]):
                 value +=1
         return value
 
-    def genetics(filtered_dico, word_length, maxgen, maxsize, timeout):
-        start_time = time.time()
+    def selection(self):
+        bestFitnesses = np.argsort([self.fitness(ind) for ind in self.population])[:self.maxSize]
+        return self.population[bestFitnesses]
 
+    @staticmethod
+    def mutateSwap(word):
+        if len(word) == 1:
+            return word
+        toSwap = np.random.choice(range(len(word)), 2, replace=False)
+        out = list(word)
+        out[toSwap[1]], out[toSwap[0]] = out[toSwap[0]], out[toSwap[1]]
+        return ''.join(out)
+
+    @staticmethod
+    def mutateSeq(word):
+        if len(word) == 1:
+            return  word
+        cut = np.random.choice(range(1, len(word)))
+        return word[cut:] + word[:cut]
+
+    @staticmethod
+    def mutateLetter(word):
+        toSwap = np.random.choice(range(len(word)))
+        newLetter = random.choice(string.ascii_lowercase)
+        while newLetter == toSwap:
+            newLetter = np.random.choice(string.ascii_lowercase)
+        return word[:toSwap] + newLetter + word[toSwap + 1:]
+
+    @staticmethod
+    def crossHalf(p1, p2):
+        cutOff = len(p1) // 2
+        out1 = p2[:cutOff] + p1[cutOff:]
+        out2 = p1[:cutOff] + p2[cutOff:]
+        return out1, out2
+
+    def generateRandomString(self):
+        return ''.join(random.sample(string.ascii_lowercase, self.word_length))
+
+    def initPop(self):
+        popSet = set()
+        while len(popSet) < self.maxSize:
+            popSet.add(self.generateRandomString())
+        self.population = np.array(list(popSet))
+        self.approximatePop()
+
+    def genetics(self):
+        geneticStartTime = time.time()
+        curGen = 0
+        self.initPop()
+        while curGen < self.maxGen and time.time() < geneticStartTime + self.timeout:
+            if self.verbose:
+                print(f'----- GENERATION {curGen} -----\n'
+                      f'SELECTION - Pop: {len(self.population)}')
+            self.population = self.selection()
+            crossRange = range(1, len(self.population), 2)
+
+            if self.verbose:
+                print(f'CROSSING - Pop: {len(self.population)}')
+
+            children = []
+            for i in crossRange:
+                children.extend(self.crossHalf(self.population[i], self.population[i - 1]))
+
+            if self.verbose:
+                print(f'MUTATION - Pop: {len(self.population)}')
+
+            childrenMut = []
+            for ind in children:
+                childMut = ind
+                for mutate in [self.mutateSeq, self.mutateSwap, self.mutateLetter]:
+                    if random.random() < self.probMut:
+                        childMut = mutate(childMut)
+                childrenMut.append(childMut)
+
+
+            popList = list(self.population)
+            popList.extend(childrenMut)
+
+            if self.verbose:
+                print(f'VALIDATION - Pop: {len(self.population)}')
+
+            self.population = np.array(popList)
+            self.approximatePop()
+
+            curGen += 1
+            if self.verbose and curGen >= self.maxGen:
+                print('Genetic algorithm ran out of generations')
+            if self.verbose and time.time() >= geneticStartTime + self.timeout:
+                print('Genetic algorithm timed out.')
+        if self.verbose:
+            print(f'------------ DONE WITH GENETICS ------------')
+        self.selection()
 
 def main(argv):
     global DICO_INST
@@ -193,8 +340,9 @@ def main(argv):
     DICO_INST = loadDico(DICO_PATH, word_length)
 
     verbose = True
-
     wMind = WordleMind(DICO_INST, 'dirty')
+
+    """
     bChrono = BackTrackChrono(word_length , wMind, verbose)
     bChrono.startGuessing()
 
@@ -202,7 +350,12 @@ def main(argv):
     bChronoArc.startGuessing()
 
     bChrono.results()
-    bChronoArc.results()
+    bChronoArc.results()"""
+
+    genGuesser = Genetics(word_length, wMind, 10, verbose=verbose)
+    genGuesser.startGuessing('')
+
+
 
 if __name__ == '__main__':
     main(sys.argv)
