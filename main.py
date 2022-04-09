@@ -159,8 +159,11 @@ class BackTrackChronoArc(WordleMindGuesser):
     """
     def __init__(self, word_length, wordleMindInst: WordleMind, verbose=False):
         super().__init__(word_length, wordleMindInst, verbose)
-        self.bestWord = '' #meileur mot deviné
-        self.bestScore = -1 #score du meilleur mot deviné
+       # self.bestWord = '' #meileur mot deviné
+        #self.bestScore = -1 #score du meilleur mot deviné
+        self.prev_words = []
+        self.prev_green = []
+        self.prev_orange = []
 
     def guess(self, strStart):
         #Meme principe que BackTrackChrono mais entre chaque essai de mot, on verifie la compatibilite avec les mots deja essayé
@@ -172,13 +175,17 @@ class BackTrackChronoArc(WordleMindGuesser):
                         print(f'BackTrackChronoArc: Trying {nextStr}')
                     green, orange = self.wordleMindInst.checkWord(nextStr)
                     self.nbTries += 1
+                    self.prev_words.append(nextStr)
+                    self.prev_green.append(green)
+                    self.prev_orange.append(orange)
 
                     if green == self.word_length:
                         self.solution = nextStr
                         return True
-                    if green + orange > self.bestScore:
-                        self.bestScore = green + orange
-                        self.bestWord = nextStr
+                    #if green + orange > self.bestScore:
+                    #    self.bestScore = green + orange
+                    #    self.bestWord = nextStr
+                    
                 else:
                     if self.guess(nextStr):
                         return True
@@ -187,12 +194,11 @@ class BackTrackChronoArc(WordleMindGuesser):
     def checkCompat(self, word):
         """Verifie la compatibilité du mot avec ceux deja essayé
         """
-        if self.bestScore == -1:
-            return True
-        green, orange = compareWords(word, self.bestWord)
-        if green + orange >= self.bestScore :
-            return True
-        return False
+        for ind in range(len(self.prev_words)):
+            green, orange = compareWords(word, self.prev_words[ind])
+            if (green,orange) != (self.prev_green[ind],self.prev_orange[ind]):
+                return False
+        return True
 
 
 class Genetics(WordleMindGuesser):
@@ -459,6 +465,7 @@ class Genetics(WordleMindGuesser):
 
 def main(argv):
     global DICO_INST
+    a = 2
     secret = "dirty"
     word_length = len(secret)
     """
@@ -474,19 +481,21 @@ def main(argv):
     verbose = True
     wMind = WordleMind(DICO_INST, secret)
 
-    """
-    bChrono = BackTrackChrono(word_length , wMind, verbose)
-    bChrono.startGuessing()
+    if a == 1:
+        bChrono = BackTrackChrono(word_length , wMind, verbose)
+        bChrono.startGuessing()
+        bChrono.results()
 
-    bChronoArc = BackTrackChronoArc(word_length , wMind, verbose)
-    bChronoArc.startGuessing()
+    if a == 2:
+        bChronoArc = BackTrackChronoArc(word_length , wMind, verbose)
+        bChronoArc.startGuessing()
+        bChronoArc.results()
+    
+    if a == 3 :
+        genGuesser = Genetics(word_length, wMind, verbose=verbose)
+        genGuesser.startGuessing('')
+        genGuesser.results()
 
-    bChrono.results()
-    bChronoArc.results()"""
-
-    genGuesser = Genetics(word_length, wMind, verbose=verbose)
-    genGuesser.startGuessing('')
-    genGuesser.results()
 
 
 
