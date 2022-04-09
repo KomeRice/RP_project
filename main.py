@@ -454,7 +454,7 @@ class Genetics(WordleMindGuesser):
         if self.verbose:
             print(f'------------ DONE WITH GENETICS ------------')
             if (len(self.population)<10):
-                print(f'Population trouvé {self.population}')
+                print(f'Pop =  {self.population}')
         return 
 
 def main(argv):
