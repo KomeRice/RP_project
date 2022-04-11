@@ -6,7 +6,7 @@ import time
 from collections import defaultdict
 
 import numpy as np
-
+import pandas as pd
 DICO_PATH = './dico.txt'
 DICO_INST = []
 
@@ -35,6 +35,13 @@ def damerau_levenshtein_distance(s1:string, s2:string):
                 d[(i, j)] = min(d[(i, j)], d[i - 2, j - 2] + cost)
 
     return d[lenstr1-1,lenstr2-1]
+
+def distance(s1,s2):
+    v = 0
+    for i in range(len(s1)):
+        if s1[i] == s2[i]:
+            v+=1
+    return v
 
 def loadDico(path, n):
     """Charge le dictionnaire
@@ -123,11 +130,13 @@ class WordleMindGuesser:
         """Affiche le resultat de la recherche
         """
         if self.guessed:
-            print(f'WordleMind solved with word {self.solution} in {self.nbTries} tries.\n'
+            print(f'WordleMind solved with word {self.solution} in {self.nbTries} tries.\t'
                   f'Time taken: {np.ceil(self.endTime - self.startTime)}s')
+            return 1,self.endTime - self.startTime , self.nbTries
         else:
-            print(f'Failed to solve WordleMind in {self.nbTries} tries.\n'
+            print(f'Failed to solve WordleMind in {self.nbTries} tries.\t'
                   f'Time taken: {np.ceil(self.endTime - self.startTime)}s')
+            return 0,self.endTime - self.startTime , self.nbTries
 
 class BackTrackChrono(WordleMindGuesser):
     """ Generation de mot en utilisant le backtraking
@@ -204,8 +213,8 @@ class BackTrackChronoArc(WordleMindGuesser):
 class Genetics(WordleMindGuesser):
     """Generation de mot en utilisant un algoritme genetique
     """
-    def __init__(self, word_length, wordleMindInst : WordleMind, maxSize = 100, maxGen = 15, timeout = 300,
-                 probMut = 0.5, verbose = False):
+    def __init__(self, word_length, wordleMindInst : WordleMind, maxSize = 50, maxGen = 10, timeout = 300,
+                 probMut = 0.3, verbose = False):
         super().__init__(word_length, wordleMindInst, verbose)
         self.population = np.array([]) #ensemble de mot compatible
         self.children = np.array([]) #ensemble de mot generé
@@ -228,8 +237,8 @@ class Genetics(WordleMindGuesser):
             print(f'Chosen word {chosenWord} - Green: {greenLetters} | Orange: {orangeLetters}')
         if greenLetters == self.word_length:
             return True
-        #initialiser une liste de 100 mots
-        self.initPop(100)
+        #initialiser une liste de mots
+        self.initPop(200)
         while True:
             geneticStartTime = time.time()
             while len(self.population)==0 and time.time() < geneticStartTime + self.timeout :
@@ -239,10 +248,10 @@ class Genetics(WordleMindGuesser):
                     self.children = self.population
                 else:
                     #si pas assez de mots : on genere d'autre mots aleatoire
-                    self.initPop(100)
+                    self.initPop(200)
                     self.children = np.append(self.children,self.population)
                     np.random.shuffle(self.children)
-            #Temps de recherche de mot exipé
+            #Temps de recherche de mot expiré
             if time.time() >= geneticStartTime + self.timeout:
                 if self.verbose:
                     print('Genetic algorithm timed out.')
@@ -279,33 +288,32 @@ class Genetics(WordleMindGuesser):
         """Etant donné une liste de chaine de caractere (children), 
         les remplacent par les mots du dictionnaire le plus proche.
         """
-        newPop = set()
+        newPop = []
         for word in self.children:
-            bestWords = set()
-            bestDist = np.inf
+            bestWords = []
+            bestDist = -1
             for dictWord in self.wordleMindInst.dico:
                 if dictWord == word:
-                    newPop.add(word)
+                    newPop.append(word)
                     break
-                curDist = damerau_levenshtein_distance(word, dictWord)
-                if curDist <= bestDist:
+                curDist = distance(word, dictWord)
+                if curDist >= bestDist:
                     bestDist = curDist
-                    bestWords = set()
-                    bestWords.add(dictWord)
+                    bestWords = []
+                    bestWords.append(dictWord)
                 elif curDist == bestDist:
-                    bestWords.add(dictWord)
-            newPop = newPop.union(bestWords)
-        popSet = set(newPop)
-        self.children = np.array(list(popSet))
+                    bestWords.append(dictWord)
+            newPop.extend(bestWords)
+        self.children = np.array(newPop)
         return
 
     def fitness(self, word):
-        """Renvoie la fitness d'un mot :cad le la somme des inconpatiblité avec les mots deja evalué
+        """Renvoie la fitness d'un mot : si le mots a un meme nombre de lettre bien placé
         """
         value = 0
         for index in range(len(self.prev_words)):
-            green, orange = compareWords(word, self.prev_words[index])
-            if (green,orange) != (self.prev_green[index],self.prev_orange[index]):
+            green, _ = compareWords(word, self.prev_words[index])
+            if green != (self.prev_green[index]):
                 value += 1
         return value
 
@@ -317,7 +325,7 @@ class Genetics(WordleMindGuesser):
                 self.population = np.append(self.population,word)
         return 
 
-    def selection(self,n = 0):
+    def selection(self,n = 0.0):
         """Selection des mots en fonction de la fitness 
         @param n probabilité de base d'etre pris
         @return la liste des mots selectionnés
@@ -329,6 +337,10 @@ class Genetics(WordleMindGuesser):
                 to_cross.append(ind)
 
         return to_cross
+
+    def selectBest(self, n =200):
+        id = np.argsort([self.fitness(i) for i in self.children])[:n]
+        return self.children[id]
 
     @staticmethod
     def mutateSwap(word):
@@ -374,13 +386,13 @@ class Genetics(WordleMindGuesser):
         @param p1, p2 : chaine de charactere
         @return out1, out2 : les chaines croisée
         """
-        cutOff = len(p1) // 2
+        cutOff = np.random.choice(range(1,len(p1)-1))
         out1 = p2[:cutOff] + p1[cutOff:]
         out2 = p1[:cutOff] + p2[cutOff:]
         return out1, out2
 
     @staticmethod
-    def cross(to_cross:list,n=30):
+    def cross(to_cross:list,n=200):
         """Croisement : croise les mots d'indice pair et d'indice impair, si la taille de la liste a retourner n'est pas atteint croise 2 mots au hasard jusqu'a atteindre n
         @param to_cross : liste de mot a croiser
         @param n : taille minimum de la liste a renvoyer
@@ -404,10 +416,10 @@ class Genetics(WordleMindGuesser):
         """
         Initialise la liste de mot
         """
-        popSet = set()
-        while len(popSet) < n:
-            popSet.add(self.generateRandomString())
-        self.children = np.array(list(popSet))
+        pop = []
+        while len(pop) < n:
+            pop.extend(self.generateRandomString())
+        self.children = np.array(pop)
         self.approximatePop()
 
     def genetics(self):
@@ -426,7 +438,7 @@ class Genetics(WordleMindGuesser):
                 break
 
             #selection des meileurs mots
-            to_cross = self.selection(0.2)
+            to_cross = self.selection()
 
             #crossRange = range(1, len(to_cross), 2)
             #childrenCross = []
@@ -441,17 +453,15 @@ class Genetics(WordleMindGuesser):
             for ind in childrenCross:
                 childMut = ind
                 for mutate in [self.mutateSeq, self.mutateSwap, self.mutateLetter]:
-                    if np.random.random() < self.probMut:
+                    if random.random() < self.probMut:
                         childMut = mutate(childMut)
                 childrenMut.append(childMut)
             self.children = np.array(childrenCross)
             self.children = np.append(self.children,childrenMut)
-            #childrenList = list(self.children)
-            #childrenList.extend(childrenMut)
 
             #tranformation des mots mutés par les mots les plus proches du dictionnaire
             self.approximatePop()
-
+            self.children = self.selectBest(200)
             #si generation max atteint, on sort de la boucle
             curGen += 1
             if self.verbose and curGen >= self.maxGen:
@@ -465,9 +475,7 @@ class Genetics(WordleMindGuesser):
 
 def main(argv):
     global DICO_INST
-    a = 2
-    secret = "dirty"
-    word_length = len(secret)
+    a = 4
     """
     try:
         word_length = int(argv[1])
@@ -476,26 +484,70 @@ def main(argv):
     except ValueError:
         print('Invalid word length given as parameter')
     """
-    DICO_INST = loadDico(DICO_PATH, word_length)
-
     verbose = True
-    wMind = WordleMind(DICO_INST, secret)
 
+    di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 1:
-        bChrono = BackTrackChrono(word_length , wMind, verbose)
-        bChrono.startGuessing()
-        bChrono.results()
+        for word_length in range(4,9):
+            DICO_INST = loadDico(DICO_PATH, word_length)
+            for i in range(10):
+                secret = random.choice(DICO_INST)
+                wMind = WordleMind(DICO_INST, secret)
 
+                bChrono = BackTrackChrono(word_length , wMind, verbose)
+                bChrono.startGuessing()
+                s,ti,tr = bChrono.results()
+
+                di["wordLength"].append(word_length)
+                di["solved"].append(s)
+                di["time"].append(ti)
+                di["tries"].append(tr)
+        pd.DataFrame(di).to_csv("./a.csv")
+
+    di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 2:
-        bChronoArc = BackTrackChronoArc(word_length , wMind, verbose)
-        bChronoArc.startGuessing()
-        bChronoArc.results()
+        for word_length in range(4,9):
+            DICO_INST = loadDico(DICO_PATH, word_length)
+            for i in range(20):
+                secret = random.choice(DICO_INST)
+                wMind = WordleMind(DICO_INST, secret)
+
+                bChronoArc = BackTrackChronoArc(word_length , wMind, verbose)
+                bChronoArc.startGuessing()
+                s,ti,tr = bChronoArc.results()
+
+                di["wordLength"].append(word_length)
+                di["solved"].append(s)
+                di["time"].append(ti)
+                di["tries"].append(tr)
+        pd.DataFrame(di).to_csv("./b.csv")
     
+    di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 3 :
+        for word_length in range(4,9):
+            DICO_INST = loadDico(DICO_PATH, word_length)
+            for i in range(20):
+                secret = random.choice(DICO_INST)
+                wMind = WordleMind(DICO_INST, secret)
+
+                genGuesser = Genetics(word_length, wMind, verbose=verbose)
+                genGuesser.startGuessing('')
+                genGuesser.results()
+
+                di["wordLength"].append(word_length)
+                di["solved"].append(s)
+                di["time"].append(ti)
+                di["tries"].append(tr)
+        pd.DataFrame(di).to_csv("./c.csv")
+
+    if a == 4:
+        secret = "fondant"
+        word_length = len(secret)
+        DICO_INST = loadDico(DICO_PATH, word_length)
+        wMind = WordleMind(DICO_INST, secret)
         genGuesser = Genetics(word_length, wMind, verbose=verbose)
         genGuesser.startGuessing('')
         genGuesser.results()
-
 
 
 
