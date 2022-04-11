@@ -434,16 +434,12 @@ class Genetics(WordleMindGuesser):
             self.ajout_Compatible()
             #sortie de boucle si maxSize atteint
             if len(self.population)>self.maxSize:
-                print(f'MAX SIZE REACHED')
+                if self.verbose:
+                    print(f'MAX SIZE REACHED')
                 break
 
             #selection des meileurs mots
             to_cross = self.selection()
-
-            #crossRange = range(1, len(to_cross), 2)
-            #childrenCross = []
-            #for i in crossRange:
-            #    childrenCross.extend(self.crossHalf(to_cross[i], to_cross[i-1]))
 
             #croisement
             childrenCross = self.cross(to_cross)
@@ -475,7 +471,7 @@ class Genetics(WordleMindGuesser):
 
 def main(argv):
     global DICO_INST
-    a = 4
+    a = 2
     """
     try:
         word_length = int(argv[1])
@@ -484,13 +480,13 @@ def main(argv):
     except ValueError:
         print('Invalid word length given as parameter')
     """
-    verbose = True
+    verbose = False
 
     di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 1:
         for word_length in range(4,9):
             DICO_INST = loadDico(DICO_PATH, word_length)
-            for i in range(10):
+            for _ in range(10):
                 secret = random.choice(DICO_INST)
                 wMind = WordleMind(DICO_INST, secret)
 
@@ -506,9 +502,10 @@ def main(argv):
 
     di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 2:
+        print("starting backtrack arc")
         for word_length in range(4,9):
             DICO_INST = loadDico(DICO_PATH, word_length)
-            for i in range(20):
+            for _ in range(10):
                 secret = random.choice(DICO_INST)
                 wMind = WordleMind(DICO_INST, secret)
 
@@ -521,12 +518,11 @@ def main(argv):
                 di["time"].append(ti)
                 di["tries"].append(tr)
         pd.DataFrame(di).to_csv("./b.csv")
-    
-    di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
-    if a == 3 :
+        print("starting genetics")
+        di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
         for word_length in range(4,9):
             DICO_INST = loadDico(DICO_PATH, word_length)
-            for i in range(20):
+            for _ in range(10):
                 secret = random.choice(DICO_INST)
                 wMind = WordleMind(DICO_INST, secret)
 
