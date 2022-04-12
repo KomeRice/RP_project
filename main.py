@@ -499,6 +499,24 @@ def main(argv):
 
     di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 2:
+        print("start backtrack")
+        di = {"word" : [],"wordLength":[],"solved" :[], "time" :[], "tries":[]}
+        for word_length in range(4,9):
+            DICO_INST = loadDico(DICO_PATH, word_length)
+            for _ in range(10):
+                secret = random.choice(DICO_INST)
+                wMind = WordleMind(DICO_INST, secret)
+
+                bChrono = BackTrackChrono(word_length , wMind, verbose)
+                bChrono.startGuessing()
+                s,ti,tr = bChrono.results()
+                di["word"].append(secret)
+                di["wordLength"].append(word_length)
+                di["solved"].append(s)
+                di["time"].append(ti)
+                di["tries"].append(tr)
+        pd.DataFrame(di).to_csv("./a.csv")
+
         print("starting genetics")
         di = {"word" : [],"wordLength":[],"solved" :[], "time" :[], "tries":[]}
         for word_length in range(4,9):
@@ -517,6 +535,7 @@ def main(argv):
                 di["tries"].append(tr)
         pd.DataFrame(di).to_csv("./c.csv")
     if a == 3:
+        
         print("starting backtrack arc")
         for word_length in range(4,9):
             DICO_INST = loadDico(DICO_PATH, word_length)
