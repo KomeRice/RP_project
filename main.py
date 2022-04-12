@@ -402,9 +402,6 @@ class Genetics(WordleMindGuesser):
         crossRange = range(1, len(to_cross), 2)
         for i in crossRange:
             childrenCross.extend(Genetics.crossHalf(to_cross[i], to_cross[i-1]))
-        while len(childrenCross) < n:
-            p1,p2 = np.random.choice(childrenCross,2,replace = False)
-            childrenCross.extend(Genetics.crossHalf(p1,p2))
         return childrenCross
 
     def generateRandomString(self):
@@ -471,7 +468,7 @@ class Genetics(WordleMindGuesser):
 
 def main(argv):
     global DICO_INST
-    a = 2
+    a = 4
     """
     try:
         word_length = int(argv[1])
@@ -502,6 +499,24 @@ def main(argv):
 
     di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 2:
+        print("starting genetics")
+        di = {"word" : [],"wordLength":[],"solved" :[], "time" :[], "tries":[]}
+        for word_length in range(4,9):
+            DICO_INST = loadDico(DICO_PATH, word_length)
+            for _ in range(10):
+                secret = random.choice(DICO_INST)
+                wMind = WordleMind(DICO_INST, secret)
+                genGuesser = Genetics(word_length, wMind, verbose=verbose)
+                genGuesser.startGuessing('')
+                genGuesser.results()
+
+                di["word"].append(secret)
+                di["wordLength"].append(word_length)
+                di["solved"].append(s)
+                di["time"].append(ti)
+                di["tries"].append(tr)
+        pd.DataFrame(di).to_csv("./c.csv")
+    if a == 3:
         print("starting backtrack arc")
         for word_length in range(4,9):
             DICO_INST = loadDico(DICO_PATH, word_length)
@@ -518,25 +533,8 @@ def main(argv):
                 di["time"].append(ti)
                 di["tries"].append(tr)
         pd.DataFrame(di).to_csv("./b.csv")
-        print("starting genetics")
-        di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
-        for word_length in range(4,9):
-            DICO_INST = loadDico(DICO_PATH, word_length)
-            for _ in range(10):
-                secret = random.choice(DICO_INST)
-                wMind = WordleMind(DICO_INST, secret)
-
-                genGuesser = Genetics(word_length, wMind, verbose=verbose)
-                genGuesser.startGuessing('')
-                genGuesser.results()
-
-                di["wordLength"].append(word_length)
-                di["solved"].append(s)
-                di["time"].append(ti)
-                di["tries"].append(tr)
-        pd.DataFrame(di).to_csv("./c.csv")
-
     if a == 4:
+        verbose = True
         secret = "fondant"
         word_length = len(secret)
         DICO_INST = loadDico(DICO_PATH, word_length)
