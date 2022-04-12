@@ -468,7 +468,7 @@ class Genetics(WordleMindGuesser):
 
 def main(argv):
     global DICO_INST
-    a = 4
+    a = 2
     """
     try:
         word_length = int(argv[1])
