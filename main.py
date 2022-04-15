@@ -1,40 +1,18 @@
 import random
-from select import select
 import string
 import sys
 import time
 from collections import defaultdict
 
+import argparse
 import numpy as np
 import pandas as pd
 DICO_PATH = './dico.txt'
 DICO_INST = []
+DICO = []
 
-def damerau_levenshtein_distance(s1:string, s2:string):
-    """Calcule la distance entre 2 chaines de characteres
-    @return la distance entre 2 mots : plus elle est faible plus les mots sont proches
-    """
-    d = {}
-    lenstr1 = len(s1)
-    lenstr2 = len(s2)
-    for i in range(-1, lenstr1 + 1):
-        d[(i, -1)] = i + 1
-    for j in range(-1, lenstr2 + 1):
-        d[(-1, j)] = j + 1
-
-    for i in range(lenstr1):
-        for j in range(lenstr2):
-            if s1[i] == s2[j]:
-                cost = 0
-            else:
-                cost = 1
-            d[(i,j)] = min(d[(i-1,j)] + 1,
-                           d[(i,j-1)] + 1,
-                           d[(i-1,j-1)] + cost)
-            if i and j and s1[i] == s2[j - 1] and s1[i - 1] == s2[j]:
-                d[(i, j)] = min(d[(i, j)], d[i - 2, j - 2] + cost)
-
-    return d[lenstr1-1,lenstr2-1]
+with open(DICO_PATH,'r') as f:
+    DICO = [line.rstrip('\n') for line in f]
 
 def distance(s1,s2):
     v = 0
@@ -208,7 +186,6 @@ class BackTrackChronoArc(WordleMindGuesser):
             if (green,orange) != (self.prev_green[ind],self.prev_orange[ind]):
                 return False
         return True
-
 
 class Genetics(WordleMindGuesser):
     """Generation de mot en utilisant un algoritme genetique
@@ -468,18 +445,52 @@ class Genetics(WordleMindGuesser):
 
 def main(argv):
     global DICO_INST
-    a = 2
-    """
-    try:
-        word_length = int(argv[1])
-    except IndexError:
-        print(f'Not enough arguments given, expected 2 got {len(argv)}\nFormat: python3 ./main.py <word_length>')
-    except ValueError:
-        print('Invalid word length given as parameter')
-    """
-    verbose = False
 
-    di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
+    parser = argparse.ArgumentParser(description='Launch app.')
+    parser.add_argument('--algorithm','-a', type=str, default="A1",choices=["A1","A2","G"],
+                        help='algoritm to choose')
+    parser.add_argument('--test', action="store_true",
+                        help='test mode')
+    parser.add_argument('--verbose','--v', action="store_true",
+                        help='verbose')
+    args = parser.parse_args()
+    verbose = args.verbose    
+
+    if args.test:
+        if args.algorithm == "A1":
+            a = 1
+        elif args.algorithm == "A2":
+            a = 2
+        elif args.algorithm == "G":
+            a = 3
+    else:
+        while True:
+            secret = str(input("\nPlease choose a word \t Type ENTER to choose random word\n"))
+            if secret == "":
+                while True :
+                    try:
+                        word_length = int(input("\nSelect a word length\n"))
+                        if 4 <= word_length and word_length <= len(max(DICO, key=len)):
+                            d = loadDico(DICO_PATH, word_length)
+                            secret = np.random.choice(d)
+                            break
+                        print(f"\nYour world length must be between 4 and{max(DICO, key=len)}")
+                    except ValueError:
+                        continue
+            if secret in DICO:
+                print(f"\nThe selected word is {secret}\n")
+                word_length = len(secret)
+                break
+            else:
+                print("This word is not in our word database")
+        if args.algorithm == "A1":
+            a = 4
+        elif args.algorithm == "A2":
+            a = 5
+        elif args.algorithm == "G":
+            a = 6
+
+    di = {"word" : [],"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 1:
         for word_length in range(4,9):
             DICO_INST = loadDico(DICO_PATH, word_length)
@@ -491,51 +502,14 @@ def main(argv):
                 bChrono.startGuessing()
                 s,ti,tr = bChrono.results()
 
+                di["word"].append(secret)
                 di["wordLength"].append(word_length)
                 di["solved"].append(s)
                 di["time"].append(ti)
                 di["tries"].append(tr)
-        pd.DataFrame(di).to_csv("./a.csv")
+        pd.DataFrame(di).to_csv("./A1.csv")
 
-    di = {"wordLength":[],"solved" :[], "time" :[], "tries":[]}
     if a == 2:
-        print("start backtrack")
-        di = {"word" : [],"wordLength":[],"solved" :[], "time" :[], "tries":[]}
-        for word_length in range(4,9):
-            DICO_INST = loadDico(DICO_PATH, word_length)
-            for _ in range(10):
-                secret = random.choice(DICO_INST)
-                wMind = WordleMind(DICO_INST, secret)
-
-                bChrono = BackTrackChrono(word_length , wMind, verbose)
-                bChrono.startGuessing()
-                s,ti,tr = bChrono.results()
-                di["word"].append(secret)
-                di["wordLength"].append(word_length)
-                di["solved"].append(s)
-                di["time"].append(ti)
-                di["tries"].append(tr)
-        pd.DataFrame(di).to_csv("./a.csv")
-
-        print("starting genetics")
-        di = {"word" : [],"wordLength":[],"solved" :[], "time" :[], "tries":[]}
-        for word_length in range(4,9):
-            DICO_INST = loadDico(DICO_PATH, word_length)
-            for _ in range(10):
-                secret = random.choice(DICO_INST)
-                wMind = WordleMind(DICO_INST, secret)
-                genGuesser = Genetics(word_length, wMind, verbose=verbose)
-                genGuesser.startGuessing('')
-                s,ti,tr = genGuesser.results()
-
-                di["word"].append(secret)
-                di["wordLength"].append(word_length)
-                di["solved"].append(s)
-                di["time"].append(ti)
-                di["tries"].append(tr)
-        pd.DataFrame(di).to_csv("./c.csv")
-    if a == 3:
-        
         print("starting backtrack arc")
         for word_length in range(4,9):
             DICO_INST = loadDico(DICO_PATH, word_length)
@@ -547,20 +521,52 @@ def main(argv):
                 bChronoArc.startGuessing()
                 s,ti,tr = bChronoArc.results()
 
+                di["word"].append(secret)
                 di["wordLength"].append(word_length)
                 di["solved"].append(s)
                 di["time"].append(ti)
                 di["tries"].append(tr)
-        pd.DataFrame(di).to_csv("./b.csv")
+        pd.DataFrame(di).to_csv("./A2.csv")
+       
+    if a == 3:
+        print("starting genetics")
+        for word_length in range(4,9):
+            DICO_INST = loadDico(DICO_PATH, word_length)
+            for _ in range(10):
+                secret = random.choice(DICO_INST)
+                wMind = WordleMind(DICO_INST, secret)
+
+                genGuesser = Genetics(word_length, wMind, verbose=verbose)
+                genGuesser.startGuessing('')
+                s,ti,tr = genGuesser.results()
+
+                di["word"].append(secret)
+                di["wordLength"].append(word_length)
+                di["solved"].append(s)
+                di["time"].append(ti)
+                di["tries"].append(tr)
+        pd.DataFrame(di).to_csv("./G.csv")
+        
     if a == 4:
-        verbose = True
-        secret = "fondant"
-        word_length = len(secret)
+        DICO_INST = loadDico(DICO_PATH, word_length)
+        wMind = WordleMind(DICO_INST, secret)
+        bChrono = BackTrackChrono(word_length , wMind, verbose)
+        bChrono.startGuessing()
+        s,ti,tr = bChrono.results()
+
+    if a == 5:
+        DICO_INST = loadDico(DICO_PATH, word_length)
+        wMind = WordleMind(DICO_INST, secret)
+        bChronoArc = BackTrackChronoArc(word_length , wMind, verbose)
+        bChronoArc.startGuessing()
+        s,ti,tr = bChronoArc.results()
+    
+    if a == 6:
         DICO_INST = loadDico(DICO_PATH, word_length)
         wMind = WordleMind(DICO_INST, secret)
         genGuesser = Genetics(word_length, wMind, verbose=verbose)
         genGuesser.startGuessing('')
-        genGuesser.results()
+        s,ti,tr = genGuesser.results()
 
 
 
