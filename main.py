@@ -526,7 +526,7 @@ def main(argv):
                 wMind = WordleMind(DICO_INST, secret)
                 genGuesser = Genetics(word_length, wMind, verbose=verbose)
                 genGuesser.startGuessing('')
-                genGuesser.results()
+                s,ti,tr = genGuesser.results()
 
                 di["word"].append(secret)
                 di["wordLength"].append(word_length)
